@@ -167,6 +167,149 @@ wss.on('connection', function connection(ws) {
   "command": "start_scan" // or "standby", "stop"
 }`;
 
+  const pythonWebSocketExample = `# Python WebSocket server implementation
+import asyncio
+import websockets
+import json
+import time
+import random
+from typing import Dict, Any
+
+class MSDataServer:
+    def __init__(self):
+        self.clients = set()
+        self.is_scanning = False
+        self.ion_source_params = {
+            "currentLCFlow": 0,
+            "ionSourceType": "ESI",
+            "posIonSprayVoltage": 3500,
+            "negIonSprayVoltage": 2300,
+            "sheathGas": 5,
+            "auxGas": 2,
+            "sweepGas": 0,
+            "ionTransferTubeTemp": 275
+        }
+        self.scan_params = {
+            "scanType": "Full Scan",
+            "orbitrapResolution": 90000,
+            "scanRangeMin": 150,
+            "scanRangeMax": 2000,
+            "rfLens": 70,
+            "agcTarget": "Standard",
+            "maxInjectionTime": "Custom",
+            "timeMs": 100,
+            "microscans": 1,
+            "sourceFragmentation": False,
+            "useEasyIC": "Off"
+        }
+
+    async def register_client(self, websocket):
+        self.clients.add(websocket)
+        # Send initial status
+        await websocket.send(json.dumps({
+            "type": "control_status",
+            "payload": {"mode": "standby", "isConnected": True}
+        }))
+        
+    async def unregister_client(self, websocket):
+        self.clients.remove(websocket)
+
+    async def handle_message(self, websocket, message):
+        try:
+            data = json.loads(message)
+            
+            if data["type"] == "control":
+                await self.handle_control_command(data["command"])
+            elif data["type"] == "ion_source_params":
+                self.ion_source_params.update(data["payload"])
+                print(f"Ion source parameters updated: {data['payload']}")
+            elif data["type"] == "scan_params":
+                self.scan_params.update(data["payload"])
+                print(f"Scan parameters updated: {data['payload']}")
+                
+        except json.JSONDecodeError:
+            print("Invalid JSON received")
+
+    async def handle_control_command(self, command: str):
+        if command in ["start_scan", "start_acquisition"]:
+            self.is_scanning = True
+            status = {"mode": "scanning", "isConnected": True}
+        elif command == "standby":
+            self.is_scanning = False
+            status = {"mode": "standby", "isConnected": True}
+        elif command in ["stop", "stop_acquisition"]:
+            self.is_scanning = False
+            status = {"mode": "off", "isConnected": True}
+        
+        # Broadcast status to all clients
+        await self.broadcast({
+            "type": "control_status",
+            "payload": status
+        })
+
+    async def broadcast(self, message):
+        if self.clients:
+            await asyncio.gather(
+                *[client.send(json.dumps(message)) for client in self.clients],
+                return_exceptions=True
+            )
+
+    async def generate_mock_data(self):
+        scan_number = 1
+        while True:
+            if self.is_scanning and self.clients:
+                # Generate mock MS data
+                data = {
+                    "type": "data",
+                    "payload": {
+                        "id": f"{int(time.time() * 1000)}_{random.randint(1000, 9999)}",
+                        "timestamp": int(time.time() * 1000),
+                        "mz": random.uniform(100, 1000),
+                        "intensity": random.uniform(1000, 100000),
+                        "scan": scan_number,
+                        "retentionTime": random.uniform(0, 60),
+                        "msLevel": 1 if random.random() < 0.7 else 2
+                    }
+                }
+                
+                if data["payload"]["msLevel"] == 2:
+                    data["payload"]["precursorMz"] = random.uniform(200, 800)
+                    data["payload"]["precursorScan"] = max(1, scan_number - random.randint(1, 5))
+                
+                await self.broadcast(data)
+                scan_number += 1
+            
+            await asyncio.sleep(0.1)  # 10 Hz data rate
+
+    async def handler(self, websocket, path):
+        await self.register_client(websocket)
+        try:
+            async for message in websocket:
+                await self.handle_message(websocket, message)
+        except websockets.exceptions.ConnectionClosed:
+            pass
+        finally:
+            await self.unregister_client(websocket)
+
+# Start the server
+async def main():
+    server = MSDataServer()
+    
+    # Start data generation task
+    asyncio.create_task(server.generate_mock_data())
+    
+    # Start WebSocket server
+    start_server = websockets.serve(server.handler, "localhost", 8080)
+    print("MS Data Server started on ws://localhost:8080")
+    
+    await start_server
+    await asyncio.Future()  # Run forever
+
+if __name__ == "__main__":
+    # Install required packages:
+    # pip install websockets
+    asyncio.run(main())`;
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -257,7 +400,7 @@ wss.on('connection', function connection(ws) {
                 <CardHeader>
                   <CardTitle>WebSocket Connection</CardTitle>
                   <CardDescription>
-                    Configure your mass spectrometry server to connect to this application
+                    Configure your Python mass spectrometry server to connect to this application
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -284,13 +427,65 @@ wss.on('connection', function connection(ws) {
                   </div>
                   
                   <div className="bg-blue-50 p-4 rounded-lg">
-                    <h4 className="font-medium text-blue-900 mb-2">Connection Requirements</h4>
+                    <h4 className="font-medium text-blue-900 mb-2">Python Server Requirements</h4>
                     <ul className="text-sm text-blue-800 space-y-1">
-                      <li>• WebSocket server running on port 8080</li>
-                      <li>• Send data in JSON format (see API Documentation)</li>
-                      <li>• Support control commands for scan management</li>
-                      <li>• Implement proper error handling and reconnection</li>
+                      <li>• Python WebSocket server on port 8080</li>
+                      <li>• Support for real-time MS data streaming</li>
+                      <li>• Handle instrument control commands</li>
+                      <li>• Support ion source and scan parameter updates</li>
+                      <li>• Install required packages: <code className="bg-blue-100 px-1 rounded">pip install websockets</code></li>
                     </ul>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Message Protocol</CardTitle>
+                  <CardDescription>
+                    Message types your Python server should handle
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <div>
+                      <h4 className="font-medium mb-2">Control Commands</h4>
+                      <div className="bg-gray-900 text-gray-100 p-3 rounded text-sm">
+                        <pre>{JSON.stringify({
+                          type: "control",
+                          command: "start_acquisition" // or start_scan, stop_acquisition, stop, standby
+                        }, null, 2)}</pre>
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <h4 className="font-medium mb-2">Ion Source Parameters</h4>
+                      <div className="bg-gray-900 text-gray-100 p-3 rounded text-sm">
+                        <pre>{JSON.stringify({
+                          type: "ion_source_params",
+                          payload: {
+                            posIonSprayVoltage: 3500,
+                            sheathGas: 5,
+                            ionTransferTubeTemp: 275
+                          }
+                        }, null, 2)}</pre>
+                      </div>
+                    </div>
+
+                    <div>
+                      <h4 className="font-medium mb-2">Scan Parameters</h4>
+                      <div className="bg-gray-900 text-gray-100 p-3 rounded text-sm">
+                        <pre>{JSON.stringify({
+                          type: "scan_params",
+                          payload: {
+                            scanType: "Full Scan",
+                            orbitrapResolution: 90000,
+                            scanRangeMin: 150,
+                            scanRangeMax: 2000
+                          }
+                        }, null, 2)}</pre>
+                      </div>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -325,23 +520,23 @@ wss.on('connection', function connection(ws) {
             <div className="space-y-6">
               <Card>
                 <CardHeader>
-                  <CardTitle>WebSocket Server Implementation</CardTitle>
+                  <CardTitle>Python WebSocket Server Implementation</CardTitle>
                   <CardDescription>
-                    Example implementation for your mass spectrometry server
+                    Complete Python server implementation for your mass spectrometry system
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="bg-gray-900 text-gray-100 p-4 rounded-lg font-mono text-xs overflow-x-auto">
-                    <pre>{websocketExampleCode}</pre>
+                    <pre>{pythonWebSocketExample}</pre>
                   </div>
                   <Button 
                     size="sm" 
                     variant="outline" 
                     className="mt-2"
-                    onClick={() => copyToClipboard(websocketExampleCode, 'Server Code')}
+                    onClick={() => copyToClipboard(pythonWebSocketExample, 'Python Server Code')}
                   >
-                    {copiedCode === 'Server Code' ? <CheckCircle className="w-4 h-4 mr-2" /> : <Copy className="w-4 h-4 mr-2" />}
-                    Copy Server Code
+                    {copiedCode === 'Python Server Code' ? <CheckCircle className="w-4 h-4 mr-2" /> : <Copy className="w-4 h-4 mr-2" />}
+                    Copy Python Server Code
                   </Button>
                 </CardContent>
               </Card>

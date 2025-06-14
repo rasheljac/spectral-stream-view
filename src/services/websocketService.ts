@@ -1,3 +1,4 @@
+
 export interface MassSpecData {
   id: string;
   timestamp: number;
@@ -20,6 +21,31 @@ export interface ScanControlStatus {
   isConnected: boolean;
 }
 
+export interface IonSourceParameters {
+  currentLCFlow: number; // µL/min
+  ionSourceType: 'ESI' | 'APCI' | 'APPI';
+  posIonSprayVoltage: number; // V
+  negIonSprayVoltage: number; // V
+  sheathGas: number; // Arb
+  auxGas: number; // Arb
+  sweepGas: number; // Arb
+  ionTransferTubeTemp: number; // °C
+}
+
+export interface ScanParameters {
+  scanType: 'Full Scan' | 'SIM' | 'SRM' | 'DDA' | 'DIA';
+  orbitrapResolution: number;
+  scanRangeMin: number; // m/z
+  scanRangeMax: number; // m/z
+  rfLens: number; // %
+  agcTarget: 'Standard' | 'Custom';
+  maxInjectionTime: 'Standard' | 'Custom';
+  timeMs: number; // ms
+  microscans: number;
+  sourceFragmentation: boolean;
+  useEasyIC: 'Off' | 'On';
+}
+
 class WebSocketService {
   private ws: WebSocket | null = null;
   private url: string;
@@ -30,6 +56,29 @@ class WebSocketService {
   private statusListeners: Set<(status: 'connected' | 'disconnected' | 'error') => void> = new Set();
   private controlStatusListeners: Set<(status: ScanControlStatus) => void> = new Set();
   private currentControlStatus: ScanControlStatus = { mode: 'off', isConnected: false };
+  private currentIonSourceParams: IonSourceParameters = {
+    currentLCFlow: 0,
+    ionSourceType: 'ESI',
+    posIonSprayVoltage: 3500,
+    negIonSprayVoltage: 2300,
+    sheathGas: 5,
+    auxGas: 2,
+    sweepGas: 0,
+    ionTransferTubeTemp: 275,
+  };
+  private currentScanParams: ScanParameters = {
+    scanType: 'Full Scan',
+    orbitrapResolution: 90000,
+    scanRangeMin: 150,
+    scanRangeMax: 2000,
+    rfLens: 70,
+    agcTarget: 'Standard',
+    maxInjectionTime: 'Custom',
+    timeMs: 100,
+    microscans: 1,
+    sourceFragmentation: false,
+    useEasyIC: 'Off',
+  };
 
   constructor(url: string = 'ws://localhost:8080') {
     this.url = url;
@@ -59,6 +108,10 @@ class WebSocketService {
             } else if (message.type === 'control_status') {
               this.currentControlStatus = { ...this.currentControlStatus, ...message.payload };
               this.notifyControlStatusListeners();
+            } else if (message.type === 'ion_source_params') {
+              this.currentIonSourceParams = { ...this.currentIonSourceParams, ...message.payload };
+            } else if (message.type === 'scan_params') {
+              this.currentScanParams = { ...this.currentScanParams, ...message.payload };
             }
           } catch (error) {
             console.error('Error parsing WebSocket message:', error);
@@ -118,7 +171,6 @@ class WebSocketService {
 
   onControlStatusChange(callback: (status: ScanControlStatus) => void) {
     this.controlStatusListeners.add(callback);
-    // Immediately call with current status
     callback(this.currentControlStatus);
     return () => this.controlStatusListeners.delete(callback);
   }
@@ -127,7 +179,7 @@ class WebSocketService {
     this.controlStatusListeners.forEach(listener => listener(this.currentControlStatus));
   }
 
-  sendControlCommand(command: 'start_scan' | 'standby' | 'stop') {
+  sendControlCommand(command: 'start_scan' | 'standby' | 'stop' | 'start_acquisition' | 'stop_acquisition') {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify({
         type: 'control',
@@ -136,27 +188,58 @@ class WebSocketService {
     }
   }
 
-  mockControlCommand(command: 'start_scan' | 'standby' | 'stop') {
+  sendIonSourceParameters(params: Partial<IonSourceParameters>) {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({
+        type: 'ion_source_params',
+        payload: params
+      }));
+    }
+    // Update local state for mock mode
+    this.currentIonSourceParams = { ...this.currentIonSourceParams, ...params };
+  }
+
+  sendScanParameters(params: Partial<ScanParameters>) {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({
+        type: 'scan_params',
+        payload: params
+      }));
+    }
+    // Update local state for mock mode
+    this.currentScanParams = { ...this.currentScanParams, ...params };
+  }
+
+  getIonSourceParameters(): IonSourceParameters {
+    return { ...this.currentIonSourceParams };
+  }
+
+  getScanParameters(): ScanParameters {
+    return { ...this.currentScanParams };
+  }
+
+  mockControlCommand(command: 'start_scan' | 'standby' | 'stop' | 'start_acquisition' | 'stop_acquisition') {
     switch (command) {
       case 'start_scan':
+      case 'start_acquisition':
         this.currentControlStatus.mode = 'scanning';
         break;
       case 'standby':
         this.currentControlStatus.mode = 'standby';
         break;
       case 'stop':
+      case 'stop_acquisition':
         this.currentControlStatus.mode = 'off';
         break;
     }
     this.notifyControlStatusListeners();
   }
 
-  // Simulate data for demo purposes when WebSocket server is not available
   startMockData() {
     let scanNumber = 1;
     
     const generateMockData = (): MassSpecData => {
-      const isMS2 = Math.random() < 0.3; // 30% chance of MS2
+      const isMS2 = Math.random() < 0.3;
       const msLevel = isMS2 ? 2 : 1;
       
       return {
@@ -172,7 +255,6 @@ class WebSocketService {
       };
     };
 
-    // Set initial mock status
     this.currentControlStatus = { mode: 'scanning', isConnected: false };
     this.notifyControlStatusListeners();
 

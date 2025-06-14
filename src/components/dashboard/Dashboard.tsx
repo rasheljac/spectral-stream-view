@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -7,6 +8,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { wsService, MassSpecData, ScanControlStatus } from '@/services/websocketService';
 import MassSpecChart from './MassSpecChart';
 import ControlPanel from './ControlPanel';
+import MSParameterControl from './MSParameterControl';
 import MS1MS2Viewer from './MS1MS2Viewer';
 import { useToast } from '@/hooks/use-toast';
 import { User } from 'lucide-react';
@@ -78,7 +80,7 @@ const Dashboard = () => {
     await logout();
   };
 
-  const handleControlCommand = (command: 'start_scan' | 'standby' | 'stop') => {
+  const handleControlCommand = (command: 'start_scan' | 'standby' | 'stop' | 'start_acquisition' | 'stop_acquisition') => {
     if (isUsingMockData) {
       wsService.mockControlCommand(command);
     } else {
@@ -202,6 +204,7 @@ const Dashboard = () => {
           <TabsList>
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="ms1ms2">MS1/MS2 Analysis</TabsTrigger>
+            <TabsTrigger value="parameters">MS Parameters</TabsTrigger>
           </TabsList>
           
           <TabsContent value="overview" className="space-y-6">
@@ -265,6 +268,10 @@ const Dashboard = () => {
           
           <TabsContent value="ms1ms2">
             <MS1MS2Viewer data={massSpecData} />
+          </TabsContent>
+
+          <TabsContent value="parameters">
+            <MSParameterControl />
           </TabsContent>
         </Tabs>
       </main>
