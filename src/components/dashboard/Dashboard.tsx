@@ -132,6 +132,9 @@ const Dashboard = () => {
               <User className="w-4 h-4 text-gray-600" />
               <span className="text-sm font-medium text-gray-700">{user?.name}</span>
             </div>
+            <Button variant="outline" onClick={() => window.location.href = '/settings'}>
+              Settings
+            </Button>
             <Button variant="outline" onClick={handleLogout}>
               Sign Out
             </Button>
