@@ -1,10 +1,14 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/contexts/AuthContext';
-import { wsService, MassSpecData } from '@/services/websocketService';
+import { wsService, MassSpecData, ScanControlStatus } from '@/services/websocketService';
 import MassSpecChart from './MassSpecChart';
+import ControlPanel from './ControlPanel';
+import MS1MS2Viewer from './MS1MS2Viewer';
 import { useToast } from '@/hooks/use-toast';
 import { User } from 'lucide-react';
 
@@ -13,6 +17,7 @@ const Dashboard = () => {
   const { toast } = useToast();
   const [massSpecData, setMassSpecData] = useState<MassSpecData[]>([]);
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'error'>('disconnected');
+  const [controlStatus, setControlStatus] = useState<ScanControlStatus>({ mode: 'off', isConnected: false });
   const [isUsingMockData, setIsUsingMockData] = useState(false);
 
   useEffect(() => {
@@ -56,9 +61,15 @@ const Dashboard = () => {
       }
     });
 
+    // Set up control status listener
+    const unsubscribeControlStatus = wsService.onControlStatusChange((status) => {
+      setControlStatus(status);
+    });
+
     return () => {
       unsubscribeData();
       unsubscribeStatus();
+      unsubscribeControlStatus();
       wsService.disconnect();
     };
   }, [toast]);
@@ -66,6 +77,14 @@ const Dashboard = () => {
   const handleLogout = () => {
     wsService.disconnect();
     logout();
+  };
+
+  const handleControlCommand = (command: 'start_scan' | 'standby' | 'stop') => {
+    if (isUsingMockData) {
+      wsService.mockControlCommand(command);
+    } else {
+      wsService.sendControlCommand(command);
+    }
   };
 
   const getStatusBadge = () => {
@@ -122,6 +141,13 @@ const Dashboard = () => {
 
       {/* Main Content */}
       <main className="p-6 space-y-6">
+        {/* Control Panel */}
+        <ControlPanel 
+          controlStatus={controlStatus}
+          onControlCommand={handleControlCommand}
+          isUsingMockData={isUsingMockData}
+        />
+
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <Card>
@@ -169,62 +195,76 @@ const Dashboard = () => {
           </Card>
         </div>
 
-        {/* Charts */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <MassSpecChart 
-            data={massSpecData} 
-            title="Mass Spectrum" 
-            type="spectrum"
-          />
-          <MassSpecChart 
-            data={massSpecData} 
-            title="Total Ion Chromatogram" 
-            type="chromatogram"
-          />
-        </div>
-
-        <div className="grid grid-cols-1 gap-6">
-          <MassSpecChart 
-            data={massSpecData} 
-            title="Real-time Intensity Monitor" 
-            type="intensity"
-          />
-        </div>
-
-        {/* Connection Info */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Connection Information</CardTitle>
-            <CardDescription>
-              Mass spectrometry data streaming details
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-              <div>
-                <span className="font-medium text-gray-600">Status:</span>
-                <span className="ml-2">{isUsingMockData ? 'Demo Mode (Simulated Data)' : connectionStatus}</span>
-              </div>
-              <div>
-                <span className="font-medium text-gray-600">Data Points:</span>
-                <span className="ml-2">{massSpecData.length}</span>
-              </div>
-              <div>
-                <span className="font-medium text-gray-600">Server URL:</span>
-                <span className="ml-2">{isUsingMockData ? 'Mock Data Generator' : 'ws://localhost:8080'}</span>
-              </div>
-              <div>
-                <span className="font-medium text-gray-600">Last Update:</span>
-                <span className="ml-2">
-                  {massSpecData.length > 0 
-                    ? new Date(massSpecData[massSpecData.length - 1].timestamp).toLocaleTimeString()
-                    : 'No data received'
-                  }
-                </span>
-              </div>
+        {/* Tabbed Interface */}
+        <Tabs defaultValue="overview" className="space-y-4">
+          <TabsList>
+            <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="ms1ms2">MS1/MS2 Analysis</TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="overview" className="space-y-6">
+            {/* Charts */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <MassSpecChart 
+                data={massSpecData} 
+                title="Mass Spectrum" 
+                type="spectrum"
+              />
+              <MassSpecChart 
+                data={massSpecData} 
+                title="Total Ion Chromatogram" 
+                type="chromatogram"
+              />
             </div>
-          </CardContent>
-        </Card>
+
+            <div className="grid grid-cols-1 gap-6">
+              <MassSpecChart 
+                data={massSpecData} 
+                title="Real-time Intensity Monitor" 
+                type="intensity"
+              />
+            </div>
+
+            {/* Connection Info */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Connection Information</CardTitle>
+                <CardDescription>
+                  Mass spectrometry data streaming details
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="font-medium text-gray-600">Status:</span>
+                    <span className="ml-2">{isUsingMockData ? 'Demo Mode (Simulated Data)' : connectionStatus}</span>
+                  </div>
+                  <div>
+                    <span className="font-medium text-gray-600">Data Points:</span>
+                    <span className="ml-2">{massSpecData.length}</span>
+                  </div>
+                  <div>
+                    <span className="font-medium text-gray-600">Server URL:</span>
+                    <span className="ml-2">{isUsingMockData ? 'Mock Data Generator' : 'ws://localhost:8080'}</span>
+                  </div>
+                  <div>
+                    <span className="font-medium text-gray-600">Last Update:</span>
+                    <span className="ml-2">
+                      {massSpecData.length > 0 
+                        ? new Date(massSpecData[massSpecData.length - 1].timestamp).toLocaleTimeString()
+                        : 'No data received'
+                      }
+                    </span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+          
+          <TabsContent value="ms1ms2">
+            <MS1MS2Viewer data={massSpecData} />
+          </TabsContent>
+        </Tabs>
       </main>
     </div>
   );
