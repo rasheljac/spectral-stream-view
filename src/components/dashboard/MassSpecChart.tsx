@@ -1,5 +1,4 @@
-
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   LineChart,
   Line,
@@ -26,42 +25,111 @@ interface MassSpecChartProps {
 const MassSpecChart = ({ data, title, type }: MassSpecChartProps) => {
   const [displayData, setDisplayData] = useState<any[]>([]);
   const [isRealTime, setIsRealTime] = useState(true);
-  const [top5, setTop5] = useState<{mz: number, intensity: number}[]>([]);
+  const [top5, setTop5] = useState<{ mz: number; intensity: number }[]>([]);
+
+  // For spectrum: track last full scan (msLevel 1)
+  const latestFullScanRef = useRef<MassSpecData[] | null>(null);
+  const [latestFullScan, setLatestFullScan] = useState<MassSpecData[] | null>(null);
+  const lastScanNumberRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (type === 'spectrum') {
-      // Group by m/z for mass spectrum display
-      const spectrumData = data.slice(-1000).map(point => ({
-        mz: Math.round(point.mz * 10) / 10,
-        intensity: point.intensity,
-      }));
+      // Filter to only msLevel 1 (full scan)
+      const fullScans = data.filter((point) => point.msLevel === 1);
+      if (fullScans.length === 0) {
+        setDisplayData([]);
+        setTop5([]);
+        setLatestFullScan(null);
+        lastScanNumberRef.current = null;
+        return;
+      }
 
-      // Compute top 5 sticks by intensity for labeling
-      const top = [...spectrumData]
-        .sort((a, b) => b.intensity - a.intensity)
-        .slice(0, 5);
+      // Find scan number of the latest full scan
+      const latestScanNumber = fullScans[fullScans.length - 1].scan;
+      // Gather all points in latest scan:
+      const latestScanPoints = fullScans.filter(
+        (point) => point.scan === latestScanNumber
+      );
 
-      setTop5(top);
+      // Update only if real time or on mount/first render, or if manual resume
+      if (isRealTime) {
+        // Store to ref and state for pause/resume
+        latestFullScanRef.current = latestScanPoints;
+        setLatestFullScan(latestScanPoints);
 
-      setDisplayData(spectrumData);
+        // Prepare charting data (aggregate same m/z by sum intensity)
+        const spectrumData: { mz: number; intensity: number }[] = latestScanPoints.map(
+          (point) => ({
+            mz: Math.round(point.mz * 10) / 10,
+            intensity: point.intensity,
+          })
+        );
+
+        // Compute top 5 sticks by intensity for labeling
+        const top = [...spectrumData]
+          .sort((a, b) => b.intensity - a.intensity)
+          .slice(0, 5);
+
+        setTop5(top);
+        setDisplayData(spectrumData);
+        lastScanNumberRef.current = latestScanNumber;
+      } else if (latestFullScanRef.current) {
+        // Keep showing last full scan when paused
+        setLatestFullScan(latestFullScanRef.current);
+
+        const spectrumData: { mz: number; intensity: number }[] = latestFullScanRef.current.map(
+          (point) => ({
+            mz: Math.round(point.mz * 10) / 10,
+            intensity: point.intensity,
+          })
+        );
+        const top = [...spectrumData]
+          .sort((a, b) => b.intensity - a.intensity)
+          .slice(0, 5);
+
+        setTop5(top);
+        setDisplayData(spectrumData);
+      }
     } else if (type === 'chromatogram') {
       // Time vs intensity for chromatogram
-      const chronData = data.slice(-500).map(point => ({
-        time: point.retentionTime,
-        intensity: point.intensity,
-        timestamp: point.timestamp,
-      }));
-      setDisplayData(chronData);
+      // Show all chromatogram points (combine ms1 and ms2)
+      if (isRealTime) {
+        const chronData = data.slice(-500).map(point => ({
+          time: point.retentionTime,
+          intensity: point.intensity,
+          timestamp: point.timestamp,
+        }));
+        setDisplayData(chronData);
+      }
+      // When paused, freeze last displayed points
+      else if (displayData.length === 0 && data.length > 0) {
+        const chronData = data.slice(-500).map(point => ({
+          time: point.retentionTime,
+          intensity: point.intensity,
+          timestamp: point.timestamp,
+        }));
+        setDisplayData(chronData);
+      }
     } else {
       // Intensity over time
-      const intensityData = data.slice(-200).map((point, index) => ({
-        index,
-        intensity: point.intensity,
-        timestamp: point.timestamp,
-      }));
-      setDisplayData(intensityData);
+      if (isRealTime) {
+        const intensityData = data.slice(-200).map((point, index) => ({
+          index,
+          intensity: point.intensity,
+          timestamp: point.timestamp,
+        }));
+        setDisplayData(intensityData);
+      } else if (displayData.length === 0 && data.length > 0) {
+        const intensityData = data.slice(-200).map((point, index) => ({
+          index,
+          intensity: point.intensity,
+          timestamp: point.timestamp,
+        }));
+        setDisplayData(intensityData);
+      }
     }
-  }, [data, type]);
+    // eslint-disable-next-line
+  }, [data, type, isRealTime]);
 
   // Custom label renderer for top 5 masses above their sticks
   const renderBarLabels = (props: any) => {
@@ -121,7 +189,6 @@ const MassSpecChart = ({ data, title, type }: MassSpecChartProps) => {
           <Bar
             dataKey="intensity"
             fill="#3b82f6"
-            // width of stick lines – very thin
             barSize={2}
             isAnimationActive={false}
           >
