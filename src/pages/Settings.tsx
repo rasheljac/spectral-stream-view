@@ -1,5 +1,4 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,22 +8,84 @@ import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { User, Settings as SettingsIcon, Wifi, Code, Copy, CheckCircle } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 
 const Settings = () => {
   const { user, logout } = useAuth();
   const { toast } = useToast();
   const [profileData, setProfileData] = useState({
-    name: user?.name || '',
+    name: '',
     email: user?.email || '',
   });
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const handleProfileUpdate = () => {
-    // Simulate profile update
-    toast({
-      title: "Profile Updated",
-      description: "Your profile information has been saved.",
-    });
+  useEffect(() => {
+    const fetchProfile = async () => {
+      if (!user) return;
+      
+      try {
+        const { data: profile, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single();
+
+        if (error) {
+          console.error('Error fetching profile:', error);
+          toast({
+            title: "Error",
+            description: "Failed to load profile data.",
+            variant: "destructive",
+          });
+        } else if (profile) {
+          setProfileData({
+            name: profile.name,
+            email: profile.email,
+          });
+        }
+      } catch (error) {
+        console.error('Error:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchProfile();
+  }, [user, toast]);
+
+  const handleProfileUpdate = async () => {
+    if (!user) return;
+
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          name: profileData.name,
+          email: profileData.email,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', user.id);
+
+      if (error) {
+        toast({
+          title: "Error",
+          description: "Failed to update profile.",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Profile Updated",
+          description: "Your profile information has been saved.",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred.",
+        variant: "destructive",
+      });
+    }
   };
 
   const copyToClipboard = (text: string, type: string) => {
@@ -84,7 +145,7 @@ wss.on('connection', function connection(ws) {
     clearInterval(interval);
     console.log('MS Data Viewer disconnected');
   });
-});`;
+};`;
 
   const dataFormatExample = `{
   "type": "data",
@@ -105,6 +166,17 @@ wss.on('connection', function connection(ws) {
   "type": "control",
   "command": "start_scan" // or "standby", "stop"
 }`;
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading settings...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
