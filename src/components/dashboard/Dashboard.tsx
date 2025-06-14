@@ -19,6 +19,7 @@ const Dashboard = () => {
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'error'>('disconnected');
   const [controlStatus, setControlStatus] = useState<ScanControlStatus>({ mode: 'off', isConnected: false });
   const [isUsingMockData, setIsUsingMockData] = useState(false);
+  const [tabValue, setTabValue] = useState('overview'); // Track active tab
 
   useEffect(() => {
     // Try to connect to WebSocket server
@@ -85,6 +86,14 @@ const Dashboard = () => {
     } else {
       wsService.sendControlCommand(command);
     }
+  };
+
+  const handleResetStats = () => {
+    setMassSpecData([]);
+    toast({
+      title: "Statistics Reset",
+      description: "Scan statistics have been reset.",
+    });
   };
 
   const getStatusBadge = () => {
@@ -158,55 +167,69 @@ const Dashboard = () => {
           isUsingMockData={isUsingMockData}
         />
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">Total Scans</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-blue-600">
-                {currentStats.totalScans.toLocaleString()}
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">Avg Intensity</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-green-600">
-                {currentStats.avgIntensity.toLocaleString()}
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">Max Intensity</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-purple-600">
-                {currentStats.maxIntensity.toLocaleString()}
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">Data Rate (Hz)</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-orange-600">
-                {currentStats.dataRate}
-              </div>
-            </CardContent>
-          </Card>
+        {/* Stats Cards and Reset */}
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 mb-2">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 flex-1">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-gray-600">Total Scans</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-blue-600">
+                  {currentStats.totalScans.toLocaleString()}
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-gray-600">Avg Intensity</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-green-600">
+                  {currentStats.avgIntensity.toLocaleString()}
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-gray-600">Max Intensity</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-purple-600">
+                  {currentStats.maxIntensity.toLocaleString()}
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-gray-600">Data Rate (Hz)</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-orange-600">
+                  {currentStats.dataRate}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+          {/* Show Reset button only on Overview tab */}
+          {tabValue === 'overview' && (
+            <Button
+              onClick={handleResetStats}
+              variant="outline"
+              className="h-10 md:ml-4 mt-2 md:mt-0 self-end"
+            >
+              Reset Stats
+            </Button>
+          )}
         </div>
 
         {/* Tabbed Interface */}
-        <Tabs defaultValue="overview" className="space-y-4">
+        <Tabs 
+          defaultValue="overview" 
+          className="space-y-4"
+          value={tabValue}
+          onValueChange={setTabValue}
+        >
           <TabsList>
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="ms1ms2">MS1/MS2 Analysis</TabsTrigger>
