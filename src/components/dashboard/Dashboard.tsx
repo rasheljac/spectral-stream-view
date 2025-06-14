@@ -11,6 +11,7 @@ import MSParameterControl from './MSParameterControl';
 import MS1MS2Viewer from './MS1MS2Viewer';
 import { useToast } from '@/hooks/use-toast';
 import { User } from 'lucide-react';
+import ResetStatsButton from "./ResetStatsButton";
 
 const Dashboard = () => {
   const { user, logout } = useAuth();
@@ -88,12 +89,17 @@ const Dashboard = () => {
     }
   };
 
+  // Move this out, kept for state and other stats
+  // const handleResetStats = () => {
+  //   setMassSpecData([]);
+  //   toast({
+  //     title: "Statistics Reset",
+  //     description: "Scan statistics have been reset.",
+  //   });
+  // };
+
   const handleResetStats = () => {
     setMassSpecData([]);
-    toast({
-      title: "Statistics Reset",
-      description: "Scan statistics have been reset.",
-    });
   };
 
   const getStatusBadge = () => {
@@ -212,15 +218,7 @@ const Dashboard = () => {
             </Card>
           </div>
           {/* Show Reset button only on Overview tab */}
-          {tabValue === 'overview' && (
-            <Button
-              onClick={handleResetStats}
-              variant="outline"
-              className="h-10 md:ml-4 mt-2 md:mt-0 self-end"
-            >
-              Reset Stats
-            </Button>
-          )}
+          <ResetStatsButton onReset={handleResetStats} show={tabValue === 'overview'} />
         </div>
 
         {/* Tabbed Interface */}
