@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import {
   LineChart,
@@ -51,44 +52,53 @@ const MassSpecChart = ({ data, title, type }: MassSpecChartProps) => {
         (point) => point.scan === latestScanNumber
       );
 
-      // Update only if real time or on mount/first render, or if manual resume
+      // Prepare charting data (aggregate same m/z by sum intensity)
+      let spectrumData: { mz: number; intensity: number }[] = latestScanPoints.map(
+        (point) => ({
+          mz: Math.round(point.mz * 10) / 10,
+          intensity: point.intensity,
+        })
+      );
+
+      // Limit to top 20 by intensity
+      spectrumData = spectrumData
+        .sort((a, b) => b.intensity - a.intensity)
+        .slice(0, 20)
+        .sort((a, b) => a.mz - b.mz); // sort by m/z for display
+
+      // Compute top 5 sticks by intensity for labeling
+      const top = [...spectrumData]
+        .sort((a, b) => b.intensity - a.intensity)
+        .slice(0, 5);
+
       if (isRealTime) {
         // Store to ref and state for pause/resume
         latestFullScanRef.current = latestScanPoints;
         setLatestFullScan(latestScanPoints);
 
-        // Prepare charting data (aggregate same m/z by sum intensity)
-        const spectrumData: { mz: number; intensity: number }[] = latestScanPoints.map(
-          (point) => ({
-            mz: Math.round(point.mz * 10) / 10,
-            intensity: point.intensity,
-          })
-        );
-
-        // Compute top 5 sticks by intensity for labeling
-        const top = [...spectrumData]
-          .sort((a, b) => b.intensity - a.intensity)
-          .slice(0, 5);
-
         setTop5(top);
         setDisplayData(spectrumData);
         lastScanNumberRef.current = latestScanNumber;
       } else if (latestFullScanRef.current) {
-        // Keep showing last full scan when paused
         setLatestFullScan(latestFullScanRef.current);
 
-        const spectrumData: { mz: number; intensity: number }[] = latestFullScanRef.current.map(
+        let pausedSpectrumData: { mz: number; intensity: number }[] = latestFullScanRef.current.map(
           (point) => ({
             mz: Math.round(point.mz * 10) / 10,
             intensity: point.intensity,
           })
         );
-        const top = [...spectrumData]
+        pausedSpectrumData = pausedSpectrumData
+          .sort((a, b) => b.intensity - a.intensity)
+          .slice(0, 20)
+          .sort((a, b) => a.mz - b.mz);
+
+        const pausedTop = [...pausedSpectrumData]
           .sort((a, b) => b.intensity - a.intensity)
           .slice(0, 5);
 
-        setTop5(top);
-        setDisplayData(spectrumData);
+        setTop5(pausedTop);
+        setDisplayData(pausedSpectrumData);
       }
     } else if (type === 'chromatogram') {
       // Time vs intensity for chromatogram
@@ -283,3 +293,4 @@ const MassSpecChart = ({ data, title, type }: MassSpecChartProps) => {
 };
 
 export default MassSpecChart;
+
