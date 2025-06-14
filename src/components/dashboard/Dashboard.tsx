@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -123,9 +122,16 @@ const Dashboard = () => {
       {/* Header */}
       <header className="bg-white border-b border-gray-200 px-6 py-4">
         <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">MS Data Viewer</h1>
-            <p className="text-sm text-gray-600">Real-time Mass Spectrometry Analysis</p>
+          <div className="flex items-center space-x-4">
+            <img 
+              src="/lovable-uploads/7c0e3f6e-8292-463e-9cf7-eefbc8b1af01.png" 
+              alt="Kapelczak Logo" 
+              className="h-8 w-auto"
+            />
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">MS Data Viewer</h1>
+              <p className="text-sm text-gray-600">Real-time Mass Spectrometry Analysis</p>
+            </div>
           </div>
           <div className="flex items-center space-x-4">
             {getStatusBadge()}
