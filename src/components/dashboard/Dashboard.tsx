@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -74,9 +73,9 @@ const Dashboard = () => {
     };
   }, [toast]);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     wsService.disconnect();
-    logout();
+    await logout();
   };
 
   const handleControlCommand = (command: 'start_scan' | 'standby' | 'stop') => {
@@ -130,7 +129,7 @@ const Dashboard = () => {
             {getStatusBadge()}
             <div className="flex items-center space-x-2">
               <User className="w-4 h-4 text-gray-600" />
-              <span className="text-sm font-medium text-gray-700">{user?.name}</span>
+              <span className="text-sm font-medium text-gray-700">{user?.email}</span>
             </div>
             <Button variant="outline" onClick={() => window.location.href = '/settings'}>
               Settings

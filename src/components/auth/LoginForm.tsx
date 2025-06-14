@@ -8,7 +8,7 @@ import { useToast } from '@/hooks/use-toast';
 import { User } from 'lucide-react';
 
 interface LoginFormProps {
-  onLogin: (email: string, password: string) => Promise<boolean>;
+  onLogin: (email: string, password: string) => Promise<{ error?: string }>;
   onToggleMode: () => void;
 }
 
@@ -23,17 +23,17 @@ const LoginForm = ({ onLogin, onToggleMode }: LoginFormProps) => {
     setIsLoading(true);
     
     try {
-      const success = await onLogin(email, password);
-      if (success) {
+      const result = await onLogin(email, password);
+      if (result.error) {
         toast({
-          title: "Login Successful",
-          description: "Welcome to MS Data Viewer",
+          title: "Login Failed",
+          description: result.error,
+          variant: "destructive",
         });
       } else {
         toast({
-          title: "Login Failed",
-          description: "Invalid email or password",
-          variant: "destructive",
+          title: "Login Successful",
+          description: "Welcome to MS Data Viewer",
         });
       }
     } catch (error) {

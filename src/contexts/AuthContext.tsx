@@ -1,17 +1,14 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-
-interface User {
-  id: string;
-  email: string;
-  name: string;
-}
+import { User, Session } from '@supabase/supabase-js';
+import { supabase } from '@/integrations/supabase/client';
 
 interface AuthContextType {
   user: User | null;
-  login: (email: string, password: string) => Promise<boolean>;
-  register: (email: string, password: string, name: string) => Promise<boolean>;
-  logout: () => void;
+  session: Session | null;
+  login: (email: string, password: string) => Promise<{ error?: string }>;
+  register: (email: string, password: string, name: string) => Promise<{ error?: string }>;
+  logout: () => Promise<void>;
   isLoading: boolean;
 }
 
@@ -31,59 +28,78 @@ interface AuthProviderProps {
 
 export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [user, setUser] = useState<User | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Check for stored user session
-    const storedUser = localStorage.getItem('msdata_user');
-    if (storedUser) {
-      setUser(JSON.parse(storedUser));
-    }
-    setIsLoading(false);
+    // Set up auth state listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        console.log('Auth state changed:', event, session?.user?.email);
+        setSession(session);
+        setUser(session?.user ?? null);
+        setIsLoading(false);
+      }
+    );
+
+    // Get initial session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setUser(session?.user ?? null);
+      setIsLoading(false);
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
-  const login = async (email: string, password: string): Promise<boolean> => {
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    // For demo purposes, accept any email/password
-    if (email && password) {
-      const userData = {
-        id: '1',
+  const login = async (email: string, password: string) => {
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
         email,
-        name: email.split('@')[0].charAt(0).toUpperCase() + email.split('@')[0].slice(1),
-      };
-      setUser(userData);
-      localStorage.setItem('msdata_user', JSON.stringify(userData));
-      return true;
+        password,
+      });
+      
+      if (error) {
+        return { error: error.message };
+      }
+      
+      return {};
+    } catch (error) {
+      return { error: 'An unexpected error occurred' };
     }
-    return false;
   };
 
-  const register = async (email: string, password: string, name: string): Promise<boolean> => {
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    if (email && password && name) {
-      const userData = {
-        id: Date.now().toString(),
+  const register = async (email: string, password: string, name: string) => {
+    try {
+      const redirectUrl = `${window.location.origin}/`;
+      
+      const { error } = await supabase.auth.signUp({
         email,
-        name,
-      };
-      setUser(userData);
-      localStorage.setItem('msdata_user', JSON.stringify(userData));
-      return true;
+        password,
+        options: {
+          emailRedirectTo: redirectUrl,
+          data: {
+            name: name,
+          }
+        }
+      });
+      
+      if (error) {
+        return { error: error.message };
+      }
+      
+      return {};
+    } catch (error) {
+      return { error: 'An unexpected error occurred' };
     }
-    return false;
   };
 
-  const logout = () => {
-    setUser(null);
-    localStorage.removeItem('msdata_user');
+  const logout = async () => {
+    await supabase.auth.signOut();
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, register, logout, isLoading }}>
+    <AuthContext.Provider value={{ user, session, login, register, logout, isLoading }}>
       {children}
     </AuthContext.Provider>
   );

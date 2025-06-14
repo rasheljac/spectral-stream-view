@@ -8,7 +8,7 @@ import { useToast } from '@/hooks/use-toast';
 import { User } from 'lucide-react';
 
 interface RegisterFormProps {
-  onRegister: (email: string, password: string, name: string) => Promise<boolean>;
+  onRegister: (email: string, password: string, name: string) => Promise<{ error?: string }>;
   onToggleMode: () => void;
 }
 
@@ -32,20 +32,29 @@ const RegisterForm = ({ onRegister, onToggleMode }: RegisterFormProps) => {
       return;
     }
 
+    if (password.length < 6) {
+      toast({
+        title: "Error",
+        description: "Password must be at least 6 characters long",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsLoading(true);
     
     try {
-      const success = await onRegister(email, password, name);
-      if (success) {
+      const result = await onRegister(email, password, name);
+      if (result.error) {
         toast({
-          title: "Registration Successful",
-          description: "Your account has been created",
+          title: "Registration Failed",
+          description: result.error,
+          variant: "destructive",
         });
       } else {
         toast({
-          title: "Registration Failed",
-          description: "An error occurred during registration",
-          variant: "destructive",
+          title: "Registration Successful",
+          description: "Please check your email to confirm your account",
         });
       }
     } catch (error) {
@@ -99,10 +108,11 @@ const RegisterForm = ({ onRegister, onToggleMode }: RegisterFormProps) => {
             <Input
               id="password"
               type="password"
-              placeholder="Choose a password"
+              placeholder="Choose a password (min 6 characters)"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
+              minLength={6}
             />
           </div>
           <div className="space-y-2">
